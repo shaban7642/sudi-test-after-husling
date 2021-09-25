@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>MediaCapture and Streams API</title>
+        <meta name="viewport" content="width=device-width" />
+        <link rel="stylesheet" href="main.css" />
+    </head>
+    <body>
+        <header>
+            <h1>MediaCapture, MediaRecorder and Streams API</h1>
+        </header>
+        <main>
+            <p>
+                Lorem ipsum dolor sit amet, consectetur adipisicing elit.
+                Impedit molestiae itaque facere totam saepe tempore esse
+                temporibus, quae reprehenderit aliquid iusto ea laborum, iure
+                eligendi odio exercitationem sapiente illum quos.
+            </p>
+
+            <p>
+                <button id="btnStart">START RECORDING</button><br />
+                <button id="btnStop">STOP RECORDING</button>
+            </p>
+            <div id="audio-container">
+                <audio controls muted></audio>
+            </div>
+
+            <!-- <audio id="aud2" controls></audio> -->
+
+            <!-- could save to canvas and do image manipulation and saving too -->
+        </main>
+        <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+        <script>
+            let constraintObj = {
+                audio: true,
+                video: false,
+            };
+            // width: 1280, height: 720  -- preference only
+            // facingMode: {exact: "user"}
+            // facingMode: "environment"
+
+            //handle older browsers that might implement getUserMedia in some way
+            if (navigator.mediaDevices === undefined) {
+                navigator.mediaDevices = {};
+                navigator.mediaDevices.getUserMedia = function (constraintObj) {
+                    let getUserMedia =
+                        navigator.webkitGetUserMedia ||
+                        navigator.mozGetUserMedia;
+                    if (!getUserMedia) {
+                        return Promise.reject(
+                            new Error(
+                                'getUserMedia is not implemented in this browser'
+                            )
+                        );
+                    }
+                    return new Promise(function (resolve, reject) {
+                        getUserMedia.call(
+                            navigator,
+                            constraintObj,
+                            resolve,
+                            reject
+                        );
+                    });
+                };
+            } else {
+                navigator.mediaDevices
+                    .enumerateDevices()
+                    .then((devices) => {
+                        devices.forEach((device) => {
+                            console.log(
+                                device.kind.toUpperCase(),
+                                device.label
+                            );
+                            //, device.deviceId
+                        });
+                    })
+                    .catch((err) => {
+                        console.log(err.name, err.message);
+                    });
+            }
+
+            navigator.mediaDevices
+                .getUserMedia(constraintObj)
+                .then(function (mediaStreamObj) {
+                    //connect the media stream to the first video element
+                    let audio = document.querySelector('audio');
+                    if ('srcObject' in audio) {
+                        audio.srcObject = mediaStreamObj;
+                    } else {
+                        //old version
+                        audio.src = window.URL.createObjectURL(mediaStreamObj);
+                    }
+                    let track = mediaStreamObj.getTracks()[0]; // if only one media track
+                    // audio.onloadedmetadata = function (ev) {
+                    //     //show in the audio element what is being captured by the webcam
+                    //     audio.play();
+                    // };
+
+                    //add listeners for saving video/audio
+                    let start = document.getElementById('btnStart');
+                    let stop = document.getElementById('btnStop');
+                    // let audSave = document.getElementById('aud2');
+                    let mediaRecorder = new MediaRecorder(mediaStreamObj);
+                    let chunks = [];
+                    let data = [];
+
+                    start.addEventListener('click', (ev) => {
+                        audio.play();
+                        mediaRecorder.start();
+                        console.log(mediaRecorder.state);
+                    });
+                    stop.addEventListener('click', (ev) => {
+                        mediaRecorder.stop();
+                        audio.load();
+                        console.log(mediaRecorder.state);
+                    });
+                    mediaRecorder.ondataavailable = function (ev) {
+                        chunks.push(ev.data);
+                    };
+                    mediaRecorder.onstop = (ev) => {
+                        let blob = new Blob(chunks, { type: 'audio/mp3;' });
+                        data.push(blob);
+                        chunks = [];
+                        let audioURL = window.URL.createObjectURL(blob);
+                        let newAudio = document.createElement('audio');
+
+                        newAudio.setAttribute('controls', 'controls');
+                        newAudio.src = audioURL;
+                        document
+                            .getElementById('audio-container')
+                            .appendChild(newAudio);
+                        console.log(chunks);
+                    };
+                })
+                .catch(function (err) {
+                    console.log(err.name, err.message);
+                });
+
+            // var peer = new Peer();
+            // peer.on('connection', function(conn) {  });
+        </script>
+    </body>
+</html>

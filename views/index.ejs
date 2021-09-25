@@ -1,0 +1,252 @@
+<!-- This is a static file -->
+<!-- served from your routes in server.js -->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="description" content="A cool thing made with Glitch" />
+
+        <title>Welcome to Glitch!</title>
+
+        <link
+            id="favicon"
+            rel="icon"
+            href="https://glitch.com/edit/favicon-app.ico"
+            type="image/x-icon"
+        />
+        <!-- import the webpage's stylesheet -->
+        <link rel="stylesheet" href="/style.css" />
+
+        <!-- import libraries -->
+        <!-- <script src="/lib/peerjs.js"></script> -->
+        <!-- <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script> -->
+
+        <!-- import the webpage's client-side javascript file -->
+    </head>
+    <body>
+        <p>
+            <button id="btnStart">START RECORDING</button><br />
+            <button id="btnStop">STOP RECORDING</button>
+        </p>
+        <div id="audio-container">
+            <audio controls muted></audio>
+        </div>
+        <input type="text" id="connect-to-peer" />
+        <button id="connect">Connect</button>
+
+        <div class="messages"></div>
+        <!-- <textarea name="" id="message"></textarea> -->
+        <button id="send">send</button>
+        <pre name="" id="messages"></pre>
+
+        <!-- include the Glitch button to show what the webpage is about and
+            to make it easier for folks to view source and remix -->
+        <div
+            class="glitchButton"
+            style="position: fixed; top: 2em; right: 20px"
+        ></div>
+        <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+        <script type="text/javascript">
+            (function () {
+                let lastPeerId = null;
+                let peer = null; // Own peer object
+                let peerId = null;
+                let conn = null;
+                let audioSrc = '';
+                let videoEl = document.querySelector('.remote-video');
+                let messagesEl = document.querySelector('.messages');
+                let peerIdEl = document.querySelector('#connect-to-peer');
+                let logMessage = (message) => {
+                    let newMessage = document.createElement('div');
+                    newMessage.innerText = message;
+                    messagesEl.appendChild(newMessage);
+                };
+
+                let renderVideo = (stream) => {
+                    videoEl.srcObject = stream;
+                };
+                /**
+                 * Create the Peer object for our end of the connection.
+                 *
+                 * Sets up callbacks that handle any events related to our
+                 * peer object.
+                 */
+                peer = new Peer(null, {
+                    debug: 2,
+                });
+                function initialize() {
+                    // Create own peer object with connection to shared PeerJS server
+
+                    peer.on('open', (id) => {
+                        logMessage('My peer ID is: ' + id);
+                        lastPeerId = id;
+                    });
+                    peer.on('error', (error) => {
+                        console.error(error);
+                    });
+                }
+
+                peer.on('connection', (conn) => {
+                    logMessage('incoming peer connection!');
+                    conn.on('data', (data) => {
+                        logMessage(`received: ${data}`);
+                        logMessage(data + '\n');
+                        let newAudio = document.createElement('audio');
+
+                        newAudio.setAttribute('controls', 'controls');
+                        newAudio.src = data;
+                        document
+                            .getElementById('audio-container')
+                            .appendChild(newAudio);
+                    });
+                    conn.on('open', () => {
+                        conn.send('connected!');
+                    });
+                });
+
+                // Initiate outgoing connection
+                let connectToPeer = () => {
+                    let peerId = peerIdEl.value;
+                    logMessage(`Connecting to ${peerId}...`);
+                    let conn = peer.connect(peerId);
+                    let conn2 = peer.connect(peerId);
+                    conn.on('open', function () {
+                        // Receive messages
+                        conn.on('data', function (data) {
+                            logMessage(`received: ${data}`);
+
+                            logMessage(data + '\n');
+                        });
+
+                        // Send messages
+                        // conn.send('connected');
+                    });
+                    navigator.mediaDevices
+                        .getUserMedia(constraintObj)
+                        .then(function (mediaStreamObj) {
+                            //connect the media stream to the first video element
+                            let audio = document.querySelector('audio');
+                            if ('srcObject' in audio) {
+                                audio.srcObject = mediaStreamObj;
+                            } else {
+                                //old version
+                                audio.src =
+                                    window.URL.createObjectURL(mediaStreamObj);
+                            }
+                            let track = mediaStreamObj.getTracks()[0]; // if only one media track
+                            // audio.onloadedmetadata = function (ev) {
+                            //     //show in the audio element what is being captured by the webcam
+                            //     audio.play();
+                            // };
+
+                            //add listeners for saving video/audio
+                            let start = document.getElementById('btnStart');
+                            let stop = document.getElementById('btnStop');
+                            // let audSave = document.getElementById('aud2');
+                            let mediaRecorder = new MediaRecorder(
+                                mediaStreamObj
+                            );
+                            let chunks = [];
+                            let data = [];
+
+                            start.addEventListener('click', (ev) => {
+                                audio.play();
+                                mediaRecorder.start();
+                                console.log(mediaRecorder.state);
+                            });
+                            stop.addEventListener('click', (ev) => {
+                                mediaRecorder.stop();
+                                audio.load();
+                                console.log(mediaRecorder.state);
+                            });
+                            mediaRecorder.ondataavailable = function (ev) {
+                                chunks.push(ev.data);
+                            };
+                            mediaRecorder.onstop = (ev) => {
+                                let blob = new Blob(chunks, {
+                                    type: 'audio/mp3;',
+                                });
+                                data.push(blob);
+                                chunks = [];
+                                let audioURL = window.URL.createObjectURL(blob);
+                                audioSrc = audioURL;
+                                let newAudio = document.createElement('audio');
+
+                                newAudio.setAttribute('controls', 'controls');
+                                newAudio.src = audioURL;
+                                document
+                                    .getElementById('audio-container')
+                                    .appendChild(newAudio);
+
+                                document
+                                    .getElementById('send')
+                                    .addEventListener('click', () => {
+                                        conn.send(
+                                            // document.getElementById('message').value
+                                            audioURL
+                                        );
+                                    });
+                                console.log(chunks);
+                            };
+                        })
+                        .catch(function (err) {
+                            console.log(err.name, err.message);
+                        });
+
+                    // document.getElementById('message').value
+                };
+                document
+                    .getElementById('connect')
+                    .addEventListener('click', connectToPeer);
+                initialize();
+            })();
+
+            let constraintObj = {
+                audio: true,
+                video: false,
+            };
+
+            //handle older browsers that might implement getUserMedia in some way
+            if (navigator.mediaDevices === undefined) {
+                navigator.mediaDevices = {};
+                navigator.mediaDevices.getUserMedia = function (constraintObj) {
+                    let getUserMedia =
+                        navigator.webkitGetUserMedia ||
+                        navigator.mozGetUserMedia;
+                    if (!getUserMedia) {
+                        return Promise.reject(
+                            new Error(
+                                'getUserMedia is not implemented in this browser'
+                            )
+                        );
+                    }
+                    return new Promise(function (resolve, reject) {
+                        getUserMedia.call(
+                            navigator,
+                            constraintObj,
+                            resolve,
+                            reject
+                        );
+                    });
+                };
+            } else {
+                navigator.mediaDevices
+                    .enumerateDevices()
+                    .then((devices) => {
+                        devices.forEach((device) => {
+                            console.log(
+                                device.kind.toUpperCase(),
+                                device.label
+                            );
+                            //, device.deviceId
+                        });
+                    })
+                    .catch((err) => {
+                        console.log(err.name, err.message);
+                    });
+            }
+        </script>
+    </body>
+</html>
